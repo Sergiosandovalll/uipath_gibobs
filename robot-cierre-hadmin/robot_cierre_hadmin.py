@@ -115,16 +115,17 @@ def procesar_operacion(page, hp, motivo, contenido, produccion):
     cancela sin confirmar el cierre real.
     """
     try:
+        page.goto(HADMIN_URL)  # estado limpio: sin restos de la operación anterior
         hp_page.buscar_operacion(page, hp)
 
-        resultado = hp_page.hay_resultado(page)
+        resultado = hp_page.hay_resultado(page, hp)
         try:
             resultado.first.wait_for(state="visible", timeout=8000)
         except PlaywrightTimeoutError:
             captura(page, hp, "01_sin_resultado")
             return "omitida", "No se encontró resultado de búsqueda para el HP"
         captura(page, hp, "01_resultado_busqueda")
-        hp_page.abrir_resultado(page)
+        hp_page.abrir_resultado(page, hp)
 
         try:
             dialogo = hp_page.click_finalizar(page)

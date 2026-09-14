@@ -44,13 +44,19 @@ def buscar_operacion(page, hp):
     caja.fill(hp)
 
 
-def hay_resultado(page):
-    """Localiza el resultado de búsqueda de la operación."""
-    return page.get_by_role("link", name="double-right home HP-")
+def hay_resultado(page, hp):
+    """Localiza el resultado de búsqueda de la operación.
+
+    Se filtra por el HP exacto (no solo por el prefijo "HP-") porque la
+    ficha de un cliente puede mostrar un bloque "Otras operaciones" con
+    hipotecas hermanas del mismo cliente, cuyos enlaces usan el mismo
+    patrón de texto y pueden quedar en la página al buscar la siguiente
+    operación, dando falsos "2 elementos encontrados"."""
+    return page.get_by_role("link", name=hp)
 
 
-def abrir_resultado(page):
-    hay_resultado(page).click()
+def abrir_resultado(page, hp):
+    hay_resultado(page, hp).click()
 
 
 def click_finalizar(page):
