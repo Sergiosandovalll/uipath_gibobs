@@ -11,8 +11,29 @@ Contenido). Los locators de abajo (`BTN_CERRAR_MODAL` / `BTN_CANCELAR_MODAL`)
 son una hipótesis razonable basada en la captura del modal, pero hay que
 verificarlos en dry-run antes de confiar en ellos para producción.
 """
+import time
+
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 DIALOG_NAME = "Cerrar hipoteca"
+
+
+def click_texto_visible(page, texto, exact=True, timeout=5000):
+    """Hace clic en la única coincidencia de texto que esté realmente
+    visible. Algunos desplegables de Hadmin dejan momentáneamente un nodo
+    duplicado (oculto) con el mismo texto mientras se abren/cierran, así
+    que en vez de adivinar un índice fijo (nth), se espera activamente a
+    que aparezca una opción visible y se hace clic en esa."""
+    locator = page.get_by_text(texto, exact=exact)
+    limite = time.time() + timeout / 1000
+    while time.time() < limite:
+        for i in range(locator.count()):
+            candidato = locator.nth(i)
+            if candidato.is_visible():
+                candidato.click()
+                return
+        page.wait_for_timeout(100)
+    raise PlaywrightTimeoutError(f"No se encontró un elemento visible con texto '{texto}'")
 
 
 def buscar_operacion(page, hp):
@@ -43,13 +64,13 @@ def click_finalizar(page):
 
 def seleccionar_cerrar_tareas_si(page):
     page.locator("#NotesPostpone").click()
-    page.get_by_text("Si", exact=True).click()
+    click_texto_visible(page, "Si", exact=True)
     page.wait_for_timeout(300)
 
 
 def seleccionar_solicitante_gibobs(page):
     page.locator("#requestReason").click()
-    page.get_by_text("Por solicitud de Gibobs").click()
+    click_texto_visible(page, "Por solicitud de Gibobs", exact=False)
     page.wait_for_timeout(300)
 
 
@@ -59,14 +80,17 @@ def seleccionar_motivo(page, motivo):
     ("Seleccione") y se elige la opción por su texto."""
     page.get_by_text("Seleccione").click()
     page.wait_for_timeout(300)
-    page.get_by_text(motivo, exact=True).click()
+    click_texto_visible(page, motivo, exact=True)
     page.wait_for_timeout(300)
 
 
 def rellenar_contenido(page, dialogo, texto):
-    editor = dialogo.get_by_role("textbox")
-    editor.click()
-    editor.fill(texto)
+    """El editor de "Contenido" es un Draft.js (contenteditable gestionado
+    por JS): no soporta rellenarse asignando el valor directamente
+    (.fill()), hay que escribir con el teclado simulado tras enfocarlo."""
+    bloque = dialogo.locator(".public-DraftStyleDefault-block").first
+    bloque.click()
+    page.keyboard.type(texto)
 
 
 def confirmar_cierre(page, dialogo):
