@@ -104,10 +104,11 @@ def procesar_operacion(page, hp, motivo, contenido, produccion):
     """
     try:
         hp_page.buscar_operacion(page, hp)
-        page.wait_for_timeout(800)  # deja cargar los resultados (no se pulsa Enter)
 
         resultado = hp_page.hay_resultado(page)
-        if resultado.count() == 0:
+        try:
+            resultado.first.wait_for(state="visible", timeout=8000)
+        except PlaywrightTimeoutError:
             return "omitida", "No se encontró resultado de búsqueda para el HP"
         hp_page.abrir_resultado(page)
 
