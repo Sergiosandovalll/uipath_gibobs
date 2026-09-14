@@ -49,7 +49,7 @@ def seleccionar_cerrar_tareas_si(page):
 
 def seleccionar_solicitante_gibobs(page):
     page.locator("#requestReason").click()
-    page.get_by_text("Por solicitud de Gibobs").nth(1).click()
+    page.get_by_text("Por solicitud de Gibobs").click()
     page.wait_for_timeout(300)
 
 
@@ -59,7 +59,7 @@ def seleccionar_motivo(page, motivo):
     ("Seleccione") y se elige la opción por su texto."""
     page.get_by_text("Seleccione").click()
     page.wait_for_timeout(300)
-    page.get_by_text(motivo, exact=True).nth(1).click()
+    page.get_by_text(motivo, exact=True).click()
     page.wait_for_timeout(300)
 
 
