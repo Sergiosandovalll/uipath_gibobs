@@ -1,6 +1,7 @@
 storage_state.json
 operaciones.csv
 logs/resultado_cierre_*.csv
+debug/
 __pycache__/
 *.pyc
 venv/

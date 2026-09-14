@@ -44,11 +44,13 @@ def click_finalizar(page):
 def seleccionar_cerrar_tareas_si(page):
     page.locator("#NotesPostpone").click()
     page.get_by_text("Si", exact=True).click()
+    page.wait_for_timeout(300)
 
 
 def seleccionar_solicitante_gibobs(page):
     page.locator("#requestReason").click()
     page.get_by_text("Por solicitud de Gibobs").nth(1).click()
+    page.wait_for_timeout(300)
 
 
 def seleccionar_motivo(page, motivo):
@@ -56,7 +58,9 @@ def seleccionar_motivo(page, motivo):
     "Por solicitud de Gibobs". Se abre haciendo clic en su placeholder
     ("Seleccione") y se elige la opción por su texto."""
     page.get_by_text("Seleccione").click()
+    page.wait_for_timeout(300)
     page.get_by_text(motivo, exact=True).nth(1).click()
+    page.wait_for_timeout(300)
 
 
 def rellenar_contenido(page, dialogo, texto):

@@ -25,6 +25,7 @@ HADMIN_URL = "https://hadmin.gibobs.com/"
 STORAGE_STATE_PATH = "storage_state.json"
 CSV_INPUT_DEFAULT = "operaciones.csv"
 LOGS_DIR = "logs"
+DEBUG_DIR = "debug"
 
 MOTIVO_DEFAULT = "Ilocalizable"
 CONTENIDO_DEFAULT = (
@@ -96,6 +97,17 @@ def nombre_log():
     return os.path.join(LOGS_DIR, nombre)
 
 
+def captura(page, hp, paso):
+    """Guarda una captura de pantalla en debug/ para poder revisar después
+    qué se veía en cada paso, sin depender de verlo en directo."""
+    os.makedirs(DEBUG_DIR, exist_ok=True)
+    nombre = f"{hp}_{paso}.png"
+    try:
+        page.screenshot(path=os.path.join(DEBUG_DIR, nombre))
+    except Exception:
+        pass  # una captura fallida no debe tumbar el proceso
+
+
 def procesar_operacion(page, hp, motivo, contenido, produccion):
     """Devuelve (estado, detalle). estado en {"ok", "error", "omitida"}.
 
@@ -109,27 +121,41 @@ def procesar_operacion(page, hp, motivo, contenido, produccion):
         try:
             resultado.first.wait_for(state="visible", timeout=8000)
         except PlaywrightTimeoutError:
+            captura(page, hp, "01_sin_resultado")
             return "omitida", "No se encontró resultado de búsqueda para el HP"
+        captura(page, hp, "01_resultado_busqueda")
         hp_page.abrir_resultado(page)
 
         try:
             dialogo = hp_page.click_finalizar(page)
         except PlaywrightTimeoutError:
+            captura(page, hp, "02_sin_finalizar_o_modal")
             return "omitida", "No aparece el botón 'Finalizar' o el modal (¿la operación ya estaba cerrada?)"
+        captura(page, hp, "02_modal_abierto")
 
         hp_page.seleccionar_cerrar_tareas_si(page)
+        captura(page, hp, "03_tareas_si")
+
         hp_page.seleccionar_solicitante_gibobs(page)
+        captura(page, hp, "04_solicitante_gibobs")
+
         hp_page.seleccionar_motivo(page, motivo)
+        captura(page, hp, "05_motivo_seleccionado")
+
         hp_page.rellenar_contenido(page, dialogo, contenido)
+        captura(page, hp, "06_contenido_relleno")
 
         if produccion:
             hp_page.confirmar_cierre(page, dialogo)
+            captura(page, hp, "07_cerrado")
             return "ok", "Cerrada correctamente"
         else:
             hp_page.cancelar_modal(page, dialogo)
+            captura(page, hp, "07_cancelado")
             return "ok", "[DRY-RUN] Formulario verificado, no se confirmó el cierre"
 
     except Exception as exc:
+        captura(page, hp, "99_error")
         return "error", str(exc)
 
 
