@@ -74,7 +74,7 @@ def preguntar_reanudar():
         "¿Continuar desde ahí y omitir las operaciones ya marcadas 'ok', "
         "o empezar de cero? [continuar/cero]: "
     ).strip().lower()
-    return respuesta.startswith("c")
+    return respuesta.startswith("cont")
 
 
 def cargar_ya_ok(reanudar):
