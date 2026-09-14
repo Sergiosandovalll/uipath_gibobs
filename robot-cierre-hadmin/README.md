@@ -7,19 +7,22 @@ listado.
 
 ## Estado actual
 
-Los selectores de todo el flujo hasta abrir el editor de "Contenido" están
-tomados de una grabación real con `playwright codegen` y ya viven en
-`hadmin_page.py`.
+✅ Flujo completo verificado de punta a punta contra Hadmin real (dry-run y
+`--produccion`, incluyendo un cierre real de una operación de prueba):
+búsqueda, apertura de ficha, modal "Cerrar hipoteca" (tareas, solicitante,
+motivo, contenido en el editor Draft.js) y confirmación con "Cerrar" /
+"Cancelar". Los selectores viven en `hadmin_page.py`.
 
-⚠️ **Pendiente de verificar**: los botones **"Cerrar"** y **"Cancelar"**
-del modal no se llegaron a grabar (la grabación se cortó justo al entrar en
-el editor de Contenido). Los locators actuales en `hadmin_page.py`
-(`confirmar_cierre` / `cancelar_modal`) son una hipótesis basada en la
-captura del modal — **hay que confirmarlos con una ejecución en dry-run
-antes de usar `--produccion`**. Si `cancelar_modal` falla en el dry-run,
-ajusta el locator en `hadmin_page.py` (por ejemplo con
-`dialogo.get_by_role("button", name="Cancelar").click()` sin `exact=True`,
-o inspeccionando el botón real con el DevTools del navegador).
+Detalles que costó averiguar y conviene recordar si algo deja de funcionar:
+
+- Los desplegables del modal son componentes custom (no `<select>`
+  nativos): hay que hacer clic para abrirlos y luego clic en el texto de
+  la opción. Algunas opciones dejan momentáneamente un nodo duplicado
+  (oculto) con el mismo texto mientras se abren/cierran, así que en vez de
+  un índice fijo (`nth`) se usa `click_texto_visible()`, que espera a que
+  haya una coincidencia realmente visible y hace clic en esa.
+- El editor de "Contenido" es Draft.js: no acepta `.fill()` de forma
+  fiable, hay que enfocarlo y escribir con `page.keyboard.type()`.
 
 ### Si algo cambia en la interfaz de Hadmin
 
