@@ -15,7 +15,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -89,6 +89,15 @@ def cargar_ya_ok(reanudar):
                 ok.add(fila.get("id_operacion"))
     print(f"Reanudando: {len(ok)} operaciones ya cerradas en '{log}' se omitirán.")
     return ok
+
+
+def formatear_duracion(segundos):
+    segundos = int(segundos)
+    horas, resto = divmod(segundos, 3600)
+    minutos, _ = divmod(resto, 60)
+    if horas:
+        return f"{horas}h {minutos}min"
+    return f"{minutos}min"
 
 
 def nombre_log():
@@ -197,14 +206,26 @@ def main():
                 writer.writerow([hp, "omitida", "Duplicado en el CSV de entrada"])
             f.flush()
 
-            for op in pendientes:
+            total = len(pendientes)
+            inicio = time.time()
+            for idx, op in enumerate(pendientes, start=1):
                 hp = op["id_operacion"]
                 estado, detalle = procesar_operacion(
                     page, hp, op["motivo"], op["contenido"], args.produccion
                 )
                 writer.writerow([hp, estado, detalle])
                 f.flush()
-                print(f"{hp}: {estado} - {detalle}")
+
+                transcurrido = time.time() - inicio
+                promedio = transcurrido / idx
+                restantes = total - idx
+                eta_segundos = promedio * restantes
+                hora_fin = (datetime.now() + timedelta(seconds=eta_segundos)).strftime("%H:%M")
+                print(
+                    f"[{idx}/{total}] {hp}: {estado} - {detalle} "
+                    f"| restan ~{formatear_duracion(eta_segundos)} (fin aprox. {hora_fin})"
+                )
+
                 time.sleep(random.uniform(1, 3))
 
         browser.close()
