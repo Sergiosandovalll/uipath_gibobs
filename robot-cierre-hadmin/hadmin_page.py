@@ -56,6 +56,10 @@ def abrir_resultado(page):
 def click_finalizar(page):
     boton = page.get_by_role("button", name="Finalizar")
     boton.wait_for(state="visible", timeout=5000)
+    if boton.is_disabled():
+        # Otra forma habitual de indicar que la operación ya está cerrada:
+        # el botón sigue visible pero deshabilitado en vez de desaparecer.
+        raise PlaywrightTimeoutError("El botón 'Finalizar' está deshabilitado")
     boton.click()
     dialogo = page.get_by_role("dialog", name=DIALOG_NAME)
     dialogo.wait_for(state="visible", timeout=5000)
