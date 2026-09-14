@@ -19,14 +19,14 @@ from datetime import datetime
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-import selectors as sel
+import hadmin_page as hp_page
 
 HADMIN_URL = "https://hadmin.gibobs.com/"
 STORAGE_STATE_PATH = "storage_state.json"
 CSV_INPUT_DEFAULT = "operaciones.csv"
 LOGS_DIR = "logs"
 
-MOTIVO_DEFAULT = sel.OPCION_MOTIVO_ILOCALIZABLE
+MOTIVO_DEFAULT = "Ilocalizable"
 CONTENIDO_DEFAULT = (
     "El cliente no ha contestado los intentos de contacto - "
     "Acción puntual Stock de Allbanks"
@@ -103,38 +103,29 @@ def procesar_operacion(page, hp, motivo, contenido, produccion):
     cancela sin confirmar el cierre real.
     """
     try:
-        page.fill(sel.SEARCH_INPUT, "")
-        page.fill(sel.SEARCH_INPUT, hp)
+        hp_page.buscar_operacion(page, hp)
         page.wait_for_timeout(800)  # deja cargar los resultados (no se pulsa Enter)
 
-        resultado = page.locator(sel.SEARCH_RESULT_LINK).first
+        resultado = hp_page.hay_resultado(page)
         if resultado.count() == 0:
             return "omitida", "No se encontró resultado de búsqueda para el HP"
-        resultado.click()
+        hp_page.abrir_resultado(page)
 
-        boton_finalizar = page.locator(sel.BTN_FINALIZAR)
         try:
-            boton_finalizar.wait_for(state="visible", timeout=5000)
+            dialogo = hp_page.click_finalizar(page)
         except PlaywrightTimeoutError:
-            return "omitida", "No aparece el botón 'Finalizar' (¿la operación ya estaba cerrada?)"
-        boton_finalizar.click()
+            return "omitida", "No aparece el botón 'Finalizar' o el modal (¿la operación ya estaba cerrada?)"
 
-        page.select_option(sel.SELECT_CERRAR_TAREAS, label=sel.OPCION_CERRAR_TAREAS_SI)
-        page.select_option(sel.SELECT_SOLICITANTE, label=sel.OPCION_SOLICITANTE_GIBOBS)
-        # El desplegable de Motivo solo aparece tras elegir "Por solicitud de
-        # Gibobs" arriba; puede necesitar una pequeña espera a que se monte.
-        page.wait_for_selector(sel.SELECT_MOTIVO, state="visible", timeout=5000)
-        page.select_option(sel.SELECT_MOTIVO, label=motivo)
-
-        editor = page.locator(sel.CONTENIDO_EDITOR)
-        editor.click()
-        editor.fill(contenido)
+        hp_page.seleccionar_cerrar_tareas_si(page)
+        hp_page.seleccionar_solicitante_gibobs(page)
+        hp_page.seleccionar_motivo(page, motivo)
+        hp_page.rellenar_contenido(page, dialogo, contenido)
 
         if produccion:
-            page.locator(sel.BTN_CERRAR_MODAL).click()
+            hp_page.confirmar_cierre(page, dialogo)
             return "ok", "Cerrada correctamente"
         else:
-            page.locator(sel.BTN_CANCELAR_MODAL).click()
+            hp_page.cancelar_modal(page, dialogo)
             return "ok", "[DRY-RUN] Formulario verificado, no se confirmó el cierre"
 
     except Exception as exc:

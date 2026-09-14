@@ -7,24 +7,31 @@ listado.
 
 ## Estado actual
 
-⚠️ **Pendiente de selectores reales.** El archivo `selectors.py` tiene
-placeholders (`"PENDIENTE"`) en vez de los selectores del DOM de Hadmin.
-El resto del robot (lectura de CSV, deduplicado, dry-run/producción, log,
-reanudación) ya está completo y no hace falta tocarlo.
+Los selectores de todo el flujo hasta abrir el editor de "Contenido" están
+tomados de una grabación real con `playwright codegen` y ya viven en
+`hadmin_page.py`.
 
-### Cómo obtener y rellenar los selectores
+⚠️ **Pendiente de verificar**: los botones **"Cerrar"** y **"Cancelar"**
+del modal no se llegaron a grabar (la grabación se cortó justo al entrar en
+el editor de Contenido). Los locators actuales en `hadmin_page.py`
+(`confirmar_cierre` / `cancelar_modal`) son una hipótesis basada en la
+captura del modal — **hay que confirmarlos con una ejecución en dry-run
+antes de usar `--produccion`**. Si `cancelar_modal` falla en el dry-run,
+ajusta el locator en `hadmin_page.py` (por ejemplo con
+`dialogo.get_by_role("button", name="Cancelar").click()` sin `exact=True`,
+o inspeccionando el botón real con el DevTools del navegador).
 
-1. En tu propio equipo (con acceso a Hadmin), ejecuta:
-   ```bash
-   playwright codegen https://hadmin.gibobs.com/
-   ```
-2. Inicia sesión y haz una vez, a mano, el flujo completo: buscar un HP →
-   clic en el resultado → clic en "Finalizar" → rellenar el modal "Cerrar
-   hipoteca" (tareas asociadas, solicitante, motivo, contenido) →
-   **cancelar** el modal en vez de confirmar si no quieres cerrar una
-   operación real de verdad.
-3. Copia del código Python que genera Playwright los selectores de cada
-   elemento y pégalos en `selectors.py`, sustituyendo cada `"PENDIENTE"`.
+### Si algo cambia en la interfaz de Hadmin
+
+Todo lo que depende del DOM real vive en `hadmin_page.py` (no en
+`robot_cierre_hadmin.py`). Para volver a capturar selectores:
+
+```bash
+playwright codegen https://hadmin.gibobs.com/
+```
+
+haz el flujo a mano y actualiza la función correspondiente en
+`hadmin_page.py`.
 
 ## Instalación
 
