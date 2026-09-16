@@ -1,0 +1,9 @@
+storage_state.json
+service_account.json
+credentials.json
+token.json
+downloads/
+debug/
+venv/
+__pycache__/
+*.pyc
