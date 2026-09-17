@@ -121,32 +121,51 @@ def leer_analista_actual(page):
     """Lee el nombre del analista actualmente asignado, en el bloque
     "Analista" de "Ficha cliente".
 
-    Confirmado por captura real: el nombre se pinta en dos líneas
-    separadas (nombre y apellidos, cada una en su propio elemento), junto
-    a una foto de avatar y el propio botón "Reasignar", bajo una etiqueta
-    "Analista". Se localiza el bloque subiendo desde el mismo botón
-    "Reasignar" que usa `click_reasignar_analista` (garantiza que es el
-    bloque de Analista, no el de Cualificador) hasta el ancestro más
-    cercano que también contenga el texto "Analista", sin depender de un
-    número fijo de niveles del DOM.
+    Confirmado por captura real (HTML real inspeccionado): "Ficha
+    cliente", "Analista" y "Otros datos" viven TODAS dentro de una única
+    tarjeta compartida (no son tres tarjetas separadas), y dentro de esa
+    misma columna, "Analista" y "Cualificador" son bloques consecutivos
+    (nombre en dos líneas + avatar + "Reasignar", uno debajo del otro,
+    seguidos de las fechas). Por eso NO se puede subir buscando "el
+    ancestro más cercano que contenga el texto 'Analista'": esa etiqueta
+    también aparece dentro del contenedor grande que engloba Cualificador
+    y las fechas, y se acaba leyendo de más (bug real visto en producción:
+    se leyó "... Cualificador Cristina Perez Fecha de creación...").
 
-    Se recompone el nombre concatenando el texto de los nodos hoja del
-    bloque con JavaScript (`textContent`, no `inner_text()`): la interfaz
-    pinta el nombre en mayúsculas con CSS (`text-transform: uppercase`),
-    pero el texto real en el DOM conserva mayúsculas/minúsculas normales,
-    que es como viene también en el CSV (p.ej. "Ana Gisela Gonçalves")."""
+    En su lugar, se sube desde el propio botón "Reasignar" (el mismo que
+    usa `click_reasignar_analista`, ya confirmado que es el de Analista)
+    nivel a nivel, y se para en cuanto el texto acumulado empieza a incluir
+    "Cualificador" o "Fecha de creaci" — así nunca se cuela el bloque de al
+    lado. El nombre se recompone concatenando el texto de los nodos hoja
+    del último nivel "seguro" con JavaScript (`textContent`, no
+    `inner_text()`): la interfaz pinta el nombre en mayúsculas con CSS
+    (`text-transform: uppercase`), pero el texto real en el DOM conserva
+    mayúsculas/minúsculas normales, que es como viene también en el CSV
+    (p.ej. "Ana Gisela Gonçalves")."""
     reasignar = page.get_by_text("Reasignar").first
-    bloque = reasignar.locator("xpath=ancestor::*[.//text()[contains(., 'Analista')]][1]")
-    return bloque.evaluate(
+    return reasignar.evaluate(
         """(el) => {
+            let nodo = el;
+            let seguro = null;
+            for (let i = 0; i < 6 && nodo.parentElement; i++) {
+                nodo = nodo.parentElement;
+                const texto = nodo.textContent.trim();
+                if (texto.includes('Cualificador') || texto.includes('Fecha de creaci')) {
+                    break;
+                }
+                seguro = nodo;
+            }
+            const contenedor = seguro || el.parentElement || el;
             const partes = [];
-            el.querySelectorAll('*').forEach((nodo) => {
-                if (nodo.children.length === 0) {
-                    const texto = (nodo.textContent || '').trim();
-                    if (texto) partes.push(texto);
+            contenedor.querySelectorAll('*').forEach((hijo) => {
+                if (hijo.children.length === 0) {
+                    const texto = (hijo.textContent || '').trim();
+                    if (texto && texto !== 'Analista' && texto !== 'Reasignar') {
+                        partes.push(texto);
+                    }
                 }
             });
-            return partes.filter((t) => t !== 'Analista' && t !== 'Reasignar').join(' ');
+            return partes.join(' ');
         }"""
     )
 
