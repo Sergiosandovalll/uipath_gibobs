@@ -24,23 +24,41 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 # Confirmado por codegen: get_by_role("dialog", name="Reasignar operación").
 DIALOG_NAME = "Reasignar operación"
 
-# Mapeo entre el nombre del analista tal como viene en el CSV (nombre
-# "oficial") y el texto que muestra realmente el desplegable de Persefone.
-# Ambos confirmados por codegen: al escribir "Ana" en el combobox aparece
-# "Ana Gonçalves" (sin "Gisela"); al escribir "Miguel" aparece "Miguel
-# Cerezal Jiménez" (con el apellido "Jiménez", que no está en el CSV). Si
-# Persefone cambia el texto que muestra para alguno de los dos, ajusta este
-# diccionario (es el único sitio que hay que tocar).
+# Nombre a usar para BUSCAR/SELECCIONAR en el desplegable del modal.
+# Confirmado por codegen: al escribir "Ana" en el combobox aparece "Ana
+# Gonçalves" (sin "Gisela"); al escribir "Miguel" aparece "Miguel Cerezal
+# Jiménez". Esto es SOLO la etiqueta corta que usa ese desplegable en
+# concreto — no es necesariamente lo mismo que muestra la ficha después.
 NOMBRE_MOSTRADO_PERSEFONE = {
     "Miguel Cerezal": "Miguel Cerezal Jiménez",
     "Ana Gisela Gonçalves": "Ana Gonçalves",
 }
 
+# Nombre completo real tal como lo muestra la propia ficha (bloque
+# "Analista") una vez aplicada la reasignación — usado para el caso "ya
+# asignada" y para verificar tras confirmar. NO es siempre igual al de
+# arriba: confirmado en producción que, aunque el desplegable muestra "Ana
+# Gonçalves", la ficha muestra el nombre completo "Ana Gisela Gonçalves"
+# (igual que el CSV). Bug real visto en producción: comparar contra el
+# nombre corto del desplegable hacía que TODAS las reasignaciones a Ana
+# salieran como error aunque se hubieran aplicado bien.
+NOMBRE_FICHA_PERSEFONE = {
+    "Miguel Cerezal": "Miguel Cerezal Jiménez",
+    "Ana Gisela Gonçalves": "Ana Gisela Gonçalves",
+}
+
 
 def nombre_mostrado(analista_csv):
-    """Traduce el nombre del CSV al texto que hay que buscar/verificar en
-    la interfaz de Persefone."""
+    """Traduce el nombre del CSV al texto que hay que buscar/seleccionar
+    en el desplegable del modal."""
     return NOMBRE_MOSTRADO_PERSEFONE.get(analista_csv, analista_csv)
+
+
+def nombre_ficha(analista_csv):
+    """Traduce el nombre del CSV al texto que debería mostrar la propia
+    ficha una vez aplicada la reasignación (para comparar, no para
+    buscar en el desplegable)."""
+    return NOMBRE_FICHA_PERSEFONE.get(analista_csv, analista_csv)
 
 
 class SesionCaducadaError(Exception):
@@ -117,9 +135,28 @@ def abrir_resultado(page, hp):
     hay_resultado(page, hp).first.click()
 
 
-def leer_analista_actual(page):
+def obtener_boton_reasignar(page):
+    """Captura UNA referencia fija (ElementHandle) al botón "Reasignar" de
+    Analista, justo después de abrir la ficha.
+
+    Bug real visto en producción: `page.get_by_text("Reasignar").first` es
+    un locator posicional que se vuelve a evaluar cada vez que se usa. Tras
+    pulsar "Confirmar", Persefone añade una nota nueva al historial y
+    puede reordenar contenido de la página; en varias operaciones eso hizo
+    que, al releer el analista DESPUÉS de confirmar, ".first" ya no
+    apuntara al mismo botón de Analista sino al de Cualificador, leyendo
+    el nombre de otra persona (reasignaciones que en realidad sí se habían
+    aplicado bien, verificado a mano). Un ElementHandle fija el nodo
+    concreto desde el principio, así que se lee siempre del mismo sitio
+    antes y después de confirmar, pase lo que pase alrededor en la
+    página."""
+    return page.get_by_text("Reasignar").first.element_handle()
+
+
+def leer_analista_actual(boton_reasignar):
     """Lee el nombre del analista actualmente asignado, en el bloque
-    "Analista" de "Ficha cliente".
+    "Analista" de "Ficha cliente", a partir del ElementHandle fijo que
+    devuelve `obtener_boton_reasignar`.
 
     Confirmado por captura real (HTML real inspeccionado): "Ficha
     cliente", "Analista" y "Otros datos" viven TODAS dentro de una única
@@ -132,18 +169,16 @@ def leer_analista_actual(page):
     y las fechas, y se acaba leyendo de más (bug real visto en producción:
     se leyó "... Cualificador Cristina Perez Fecha de creación...").
 
-    En su lugar, se sube desde el propio botón "Reasignar" (el mismo que
-    usa `click_reasignar_analista`, ya confirmado que es el de Analista)
-    nivel a nivel, y se para en cuanto el texto acumulado empieza a incluir
-    "Cualificador" o "Fecha de creaci" — así nunca se cuela el bloque de al
-    lado. El nombre se recompone concatenando el texto de los nodos hoja
-    del último nivel "seguro" con JavaScript (`textContent`, no
-    `inner_text()`): la interfaz pinta el nombre en mayúsculas con CSS
-    (`text-transform: uppercase`), pero el texto real en el DOM conserva
-    mayúsculas/minúsculas normales, que es como viene también en el CSV
-    (p.ej. "Ana Gisela Gonçalves")."""
-    reasignar = page.get_by_text("Reasignar").first
-    return reasignar.evaluate(
+    En su lugar, se sube desde el propio botón "Reasignar" nivel a nivel,
+    y se para en cuanto el texto acumulado empieza a incluir "Cualificador"
+    o "Fecha de creaci" — así nunca se cuela el bloque de al lado. El
+    nombre se recompone concatenando el texto de los nodos hoja del último
+    nivel "seguro" con JavaScript (`textContent`, no `inner_text()`): la
+    interfaz pinta el nombre en mayúsculas con CSS (`text-transform:
+    uppercase`), pero el texto real en el DOM conserva mayúsculas/
+    minúsculas normales, que es como viene también en el CSV (p.ej. "Ana
+    Gisela Gonçalves")."""
+    return boton_reasignar.evaluate(
         """(el) => {
             let nodo = el;
             let seguro = null;
@@ -182,16 +217,17 @@ def operacion_esta_cerrada(page):
     return page.get_by_text("Operación cerrada por", exact=False).first.is_visible()
 
 
-def click_reasignar_analista(page):
+def click_reasignar_analista(boton_reasignar, page):
     """Pulsa el botón "Reasignar" del bloque "Analista" (nunca el de
-    "Cualificador") y espera a que se abra el modal. Devuelve el locator
-    del diálogo abierto.
+    "Cualificador"), usando el mismo ElementHandle fijo de
+    `obtener_boton_reasignar`, y espera a que se abra el modal. Devuelve el
+    locator del diálogo abierto.
 
-    Confirmado por codegen que `get_by_text("Reasignar").first` abre
-    efectivamente el modal de reasignación de Analista en el flujo grabado,
-    y confirmado también que el bloque "Analista" siempre precede al de
-    "Cualificador" en el DOM de la ficha, así que `.first` es seguro."""
-    page.get_by_text("Reasignar").first.click()
+    Confirmado por codegen que este botón abre efectivamente el modal de
+    reasignación de Analista, y confirmado también que el bloque
+    "Analista" siempre precede al de "Cualificador" en el DOM de la
+    ficha."""
+    boton_reasignar.click()
 
     dialogo = page.get_by_role("dialog", name=DIALOG_NAME)
     dialogo.wait_for(state="visible", timeout=5000)
@@ -209,9 +245,11 @@ def seleccionar_analista(dialogo, analista_objetivo):
     varios analistas distintos en la lista (visto en producción: salía
     también "Miguel Ángel Sánchez"), lo que aumenta el riesgo de que la
     lista virtualizada del desplegable tape o recicle la fila justo al
-    hacer clic. Tras seleccionar, se da un margen para que el desplegable
-    termine de cerrarse del todo (visto en producción: a veces se quedaba
-    abierto tapando el botón "Confirmar" y bloqueaba el clic)."""
+    hacer clic. Tras seleccionar, se espera activamente (no una espera fija)
+    a que el propio texto elegido dentro del combobox quede estable y no
+    haya ya ningún listado de opciones visible, para no bloquear el clic de
+    "Confirmar" (visto en producción) sin perder tiempo de más cuando el
+    desplegable cierra rápido."""
     texto_mostrado = nombre_mostrado(analista_objetivo)
     partes = texto_mostrado.split()
     termino_busqueda = " ".join(partes[:2]) if len(partes) >= 2 else texto_mostrado
@@ -220,7 +258,11 @@ def seleccionar_analista(dialogo, analista_objetivo):
     combobox.click()
     combobox.fill(termino_busqueda)
     click_texto_visible(dialogo.page, texto_mostrado, exact=True)
-    dialogo.page.wait_for_timeout(1500)
+
+    listbox = dialogo.page.get_by_role("listbox")
+    limite = time.time() + 2
+    while time.time() < limite and listbox.count() > 0 and listbox.first.is_visible():
+        dialogo.page.wait_for_timeout(50)
 
 
 def confirmar(dialogo):

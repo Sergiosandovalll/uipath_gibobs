@@ -152,8 +152,14 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
         pp_page.abrir_resultado(page, hp)
         captura(page, hp, "02_ficha_abierta")
 
-        texto_esperado = pp_page.nombre_mostrado(analista_objetivo)
-        analista_actual = pp_page.leer_analista_actual(page)
+        # Referencia fija al botón "Reasignar" de Analista, capturada una
+        # sola vez: evita que una relectura posicional (".first") acabe
+        # apuntando al bloque de Cualificador si la página cambia algo
+        # alrededor tras confirmar (bug real visto en producción).
+        boton_reasignar = pp_page.obtener_boton_reasignar(page)
+
+        texto_esperado = pp_page.nombre_ficha(analista_objetivo)
+        analista_actual = pp_page.leer_analista_actual(boton_reasignar)
         if analista_actual and analista_actual.strip() == texto_esperado.strip():
             return "omitida", f"Ya estaba asignada a {analista_actual}"
 
@@ -162,7 +168,7 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
             nota_cerrada = " (Operación cerrada, se reasignó igualmente)"
 
         try:
-            dialogo = pp_page.click_reasignar_analista(page)
+            dialogo = pp_page.click_reasignar_analista(boton_reasignar, page)
         except PlaywrightTimeoutError:
             captura(page, hp, "03_sin_boton_reasignar")
             return "error", "No aparece el botón 'Reasignar' de Analista"
@@ -196,13 +202,13 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
             # comprobarlo demasiado pronto), así que se reintenta durante
             # unos segundos antes de dar el error por bueno.
             limite_verificacion = time.time() + 4
-            nuevo_analista = pp_page.leer_analista_actual(page)
+            nuevo_analista = pp_page.leer_analista_actual(boton_reasignar)
             while (
                 nuevo_analista.strip() != texto_esperado.strip()
                 and time.time() < limite_verificacion
             ):
                 time.sleep(0.5)
-                nuevo_analista = pp_page.leer_analista_actual(page)
+                nuevo_analista = pp_page.leer_analista_actual(boton_reasignar)
 
             if not nuevo_analista or nuevo_analista.strip() != texto_esperado.strip():
                 captura(page, hp, "99_error")
@@ -299,7 +305,7 @@ def main():
                     f"| {analista_objetivo} | restan ~{formatear_duracion(eta_segundos)} (fin aprox. {hora_fin})"
                 )
 
-                time.sleep(random.uniform(1, 3))
+                time.sleep(random.uniform(0.4, 1))
             else:
                 duracion_total = formatear_duracion(time.time() - inicio) if total else "0min"
                 print(f"\nProcesadas {total}/{total} operaciones en {duracion_total}.")
