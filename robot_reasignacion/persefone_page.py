@@ -2,31 +2,56 @@
 Interacciones con el DOM real de Persefone
 (https://persefone.gibobs.gibobs.one/dashboard).
 
-⚠️ ESTADO: PENDIENTE DE CODEGEN REAL. ⚠️
-Persefone es un sistema DISTINTO de Hadmin (interfaz y DOM distintos), y
-todavía no se ha grabado el flujo real con `playwright codegen`. Todos los
-locators de este archivo son PLACEHOLDERS razonables basados en la
-descripción funcional del flujo, no en el DOM real. Antes de usar este
-robot en dry-run siquiera, hay que:
+Este es el único archivo que depende de la estructura concreta de la
+interfaz de Persefone: si algo cambia en el DOM, se toca aquí.
+robot_reasignacion.py no debe conocer selectores.
 
-    playwright codegen https://persefone.gibobs.gibobs.one/dashboard
+⚠️ ESTADO: PARCIALMENTE CONFIRMADO con `playwright codegen` real (login,
+búsqueda, apertura de resultado, apertura del modal, desplegable con
+búsqueda por texto y "Confirmar"). Lo que queda como TODO explícito abajo
+NO se llegó a grabar todavía y sigue siendo una hipótesis razonable:
 
-...hacer el flujo a mano (buscar HP, abrir ficha, pulsar "Reasignar" del
-bloque Analista, elegir analista en el desplegable del modal, "Confirmar"
-y "Cancelar") y sustituir cada función de abajo por los locators reales
-capturados. Este es el único archivo que debería tocarse si cambia el DOM
-de Persefone: robot_reasignacion.py no debe conocer selectores.
-
-Recordatorio de negocio importante al verificar los selectores reales:
-la ficha tiene DOS botones "Reasignar" (uno para "Analista" y otro para
-"Cualificador"). El robot NUNCA debe pulsar el de "Cualificador".
+- `leer_analista_actual`: no se grabó el bloque "Analista" de "Ficha
+  cliente". Hace falta abrir una ficha y capturar cómo se lee ese valor.
+- `operacion_esta_cerrada`: no se grabó ningún indicador de cierre.
+- `cancelar`: no se probó el botón "Cancelar" del modal (solo "Confirmar").
+- El botón "Reasignar" se localiza con `.first` sobre todo el texto
+  "Reasignar" de la página (así es como funcionó en la grabación real),
+  pero eso depende de que el bloque "Analista" aparezca siempre ANTES que
+  el de "Cualificador" en el DOM. Es un riesgo de negocio real (la ficha
+  tiene DOS botones "Reasignar" y el robot NUNCA debe tocar el de
+  "Cualificador"). Mitigación obligatoria: antes de cualquier ejecución en
+  --produccion, revisa a mano la primera captura
+  `debug/<HP>_03_modal_abierto.png` de una tanda en dry-run y confirma que
+  el modal que se abrió corresponde a "Analista". En dry-run no hay riesgo
+  real (se cancela siempre), así que es un buen punto de verificación.
 """
+import re
 import time
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-# TODO: confirmar con codegen. Nombre/título real del modal de reasignación.
+# Confirmado por codegen: get_by_role("dialog", name="Reasignar operación").
 DIALOG_NAME = "Reasignar operación"
+
+# Mapeo entre el nombre del analista tal como viene en el CSV (nombre
+# completo "oficial") y el texto que muestra realmente el desplegable de
+# Persefone. Confirmado por codegen para Ana Gisela Gonçalves: al escribir
+# "Ana" en el combobox, la opción que aparece es "Ana Gonçalves" (sin
+# "Gisela"). Para Miguel Cerezal se asume que coincide tal cual porque no
+# hay indicio de lo contrario, pero **falta confirmarlo** con un dry-run
+# real. Si Persefone muestra otro texto para alguno de los dos, ajusta este
+# diccionario (es el único sitio que hay que tocar).
+NOMBRE_MOSTRADO_PERSEFONE = {
+    "Miguel Cerezal": "Miguel Cerezal",  # TODO: confirmar en dry-run
+    "Ana Gisela Gonçalves": "Ana Gonçalves",  # confirmado por codegen
+}
+
+
+def nombre_mostrado(analista_csv):
+    """Traduce el nombre del CSV al texto que hay que buscar/verificar en
+    la interfaz de Persefone."""
+    return NOMBRE_MOSTRADO_PERSEFONE.get(analista_csv, analista_csv)
 
 
 class SesionCaducadaError(Exception):
@@ -44,8 +69,8 @@ def click_texto_visible(page, texto, exact=True, timeout=5000):
 
     Reutilizado tal cual de hadmin_page.py (helper genérico, no depende del
     DOM de un sistema en concreto). Recibe `page` (no un locator acotado)
-    porque los desplegables tipo Ant Design suelen montar sus opciones en un
-    portal fuera del propio modal."""
+    porque el desplegable del modal (confirmado por codegen) monta sus
+    opciones fuera del propio diálogo."""
     locator = page.get_by_text(texto, exact=exact)
     limite = time.time() + timeout / 1000
     while time.time() < limite:
@@ -62,34 +87,41 @@ def pagina_es_login(page):
     """Detecta si Persefone ha devuelto la pantalla de login en vez del
     panel (sesión caducada).
 
-    TODO: confirmar con codegen. Placeholder: se asume que la pantalla de
-    login tiene un campo de contraseña visible y/o un botón "Iniciar
-    sesión"."""
+    Confirmado por codegen: sin sesión válida, Persefone redirige a
+    `/login?redirect=%2Fdashboard`. Se comprueba la URL (rápido y fiable) y,
+    por si acaso la URL no cambiara en algún caso, también el campo
+    "Contraseña" del formulario de login como respaldo."""
     try:
-        return page.get_by_label("Contraseña").is_visible(timeout=3000) or \
-            page.get_by_role("button", name="Iniciar sesión").is_visible(timeout=1000)
+        page.wait_for_load_state("domcontentloaded", timeout=5000)
+    except PlaywrightTimeoutError:
+        pass
+    if "/login" in page.url:
+        return True
+    try:
+        return page.get_by_role("textbox", name="Contraseña").is_visible(timeout=2000)
     except PlaywrightTimeoutError:
         return False
 
 
 def buscar_operacion(page, hp):
-    """Escribe el HP en el buscador de Persefone.
+    """Escribe el HP en el buscador general de Persefone.
 
-    TODO: confirmar con codegen el selector real del buscador (placeholder:
-    textbox con nombre/placeholder "Buscar")."""
-    caja = page.get_by_role("textbox", name="Buscar")
+    Confirmado por codegen: textbox "Búsqueda general". La búsqueda filtra
+    en vivo (el codegen no pulsó Enter), así que no se envía."""
+    caja = page.get_by_role("textbox", name="Búsqueda general")
     caja.click()
     caja.fill("")
     caja.fill(hp)
-    page.keyboard.press("Enter")
 
 
 def hay_resultado(page, hp):
-    """Localiza el resultado de búsqueda de la operación por su HP exacto.
+    """Localiza el resultado de búsqueda de la operación por su HP.
 
-    TODO: confirmar con codegen. Placeholder: un enlace/fila cuyo texto es
-    el HP exacto."""
-    return page.get_by_text(hp, exact=True)
+    Confirmado por codegen: el resultado es un link cuyo nombre accesible
+    empieza por el HP y sigue con más info (tramo y analista actual, p.ej.
+    "HP-000748337 T1:  Javier Pena"). Se ancla al principio del texto para
+    no depender del resto, que varía por operación."""
+    return page.get_by_role("link", name=re.compile(rf"^{re.escape(hp)}"))
 
 
 def abrir_resultado(page, hp):
@@ -100,8 +132,9 @@ def leer_analista_actual(page):
     """Lee el nombre del analista actualmente asignado, en el bloque
     "Analista" de "Ficha cliente".
 
-    TODO: confirmar con codegen el contenedor real. Placeholder: se busca
-    un bloque con encabezado "Analista" y se lee el texto que sigue."""
+    TODO: NO CONFIRMADO CON CODEGEN. No se grabó este paso todavía. Hace
+    falta abrir una ficha real y capturar cómo se muestra este dato para
+    reemplazar el placeholder de abajo."""
     bloque = page.locator("text=Analista").first.locator("xpath=..")
     return bloque.inner_text().replace("Analista", "").strip()
 
@@ -110,9 +143,10 @@ def operacion_esta_cerrada(page):
     """Indica si la operación está cerrada (para añadir la nota
     correspondiente en el log, no para bloquear la reasignación).
 
-    TODO: confirmar con codegen el indicador real. Placeholder: se asume
-    que existe un botón "Finalizar" que aparece deshabilitado, o no
-    aparece en absoluto, cuando la operación está cerrada."""
+    TODO: NO CONFIRMADO CON CODEGEN. No se grabó ningún indicador de cierre
+    en Persefone. Placeholder heredado del patrón de Hadmin (botón
+    "Finalizar" ausente o deshabilitado): hay que verificar si existe algo
+    equivalente en Persefone."""
     boton = page.get_by_role("button", name="Finalizar")
     if boton.count() == 0:
         return True
@@ -124,43 +158,49 @@ def click_reasignar_analista(page):
     "Cualificador") y espera a que se abra el modal. Devuelve el locator
     del diálogo abierto.
 
-    TODO: confirmar con codegen. Placeholder: se acota la búsqueda del
-    botón "Reasignar" al contenedor que tiene el texto "Analista", para no
-    arriesgarse a pulsar el de "Cualificador" que vive en otro bloque."""
-    bloque_analista = page.locator("text=Analista").first.locator(
-        "xpath=ancestor-or-self::*[self::div or self::section][1]"
-    )
-    boton = bloque_analista.get_by_role("button", name="Reasignar")
-    boton.wait_for(state="visible", timeout=5000)
-    boton.click()
+    Confirmado por codegen que `get_by_text("Reasignar").first` abre
+    efectivamente el modal de reasignación de Analista en el flujo grabado.
+    ⚠️ Esto depende del orden del DOM (bloque Analista antes que
+    Cualificador) y NO está verificado de forma robusta — ver aviso al
+    principio del archivo sobre la verificación manual obligatoria antes de
+    producción."""
+    page.get_by_text("Reasignar").first.click()
 
     dialogo = page.get_by_role("dialog", name=DIALOG_NAME)
     dialogo.wait_for(state="visible", timeout=5000)
     return dialogo
 
 
-def seleccionar_analista(dialogo, analista):
-    """Abre el desplegable "Analista" del modal y selecciona el nombre
-    exacto pasado por parámetro.
+def seleccionar_analista(dialogo, analista_objetivo):
+    """Abre el desplegable "Analista" del modal (un combobox con búsqueda)
+    y selecciona el analista objetivo.
 
-    TODO: confirmar con codegen el selector real del desplegable
-    (placeholder: se abre por su placeholder "Seleccione" y se elige la
-    opción por texto visible, igual que en Hadmin)."""
-    dialogo.get_by_text("Seleccione").click()
-    dialogo.page.wait_for_timeout(300)
-    click_texto_visible(dialogo.page, analista, exact=True)
-    dialogo.page.wait_for_timeout(300)
+    Confirmado por codegen: `get_by_role("combobox")` dentro del diálogo;
+    se hace clic, se escribe el primer nombre para filtrar (igual que en la
+    grabación, que escribió "Ana") y se hace clic en la opción visible con
+    el texto exacto que muestra Persefone (ver `NOMBRE_MOSTRADO_PERSEFONE`,
+    que no siempre coincide con el nombre completo del CSV)."""
+    texto_mostrado = nombre_mostrado(analista_objetivo)
+    termino_busqueda = texto_mostrado.split()[0]
+
+    combobox = dialogo.get_by_role("combobox")
+    combobox.click()
+    combobox.fill(termino_busqueda)
+    click_texto_visible(dialogo.page, texto_mostrado, exact=True)
 
 
 def confirmar(dialogo):
     """Pulsa "Confirmar" en el modal: aplica la reasignación real.
 
-    TODO: confirmar con codegen el texto/rol exacto del botón."""
+    Confirmado por codegen: get_by_role("button", name="Confirmar")."""
     dialogo.get_by_role("button", name="Confirmar", exact=True).click()
 
 
 def cancelar(dialogo):
     """Pulsa "Cancelar" en el modal: no aplica ningún cambio (dry-run).
 
-    TODO: confirmar con codegen el texto/rol exacto del botón."""
+    TODO: NO CONFIRMADO CON CODEGEN. La grabación solo probó "Confirmar".
+    Se asume que el botón se llama "Cancelar" (mismo patrón que Hadmin y que
+    el resto de modales de la aplicación), pero hay que verificarlo en el
+    primer dry-run real."""
     dialogo.get_by_role("button", name="Cancelar", exact=True).click()

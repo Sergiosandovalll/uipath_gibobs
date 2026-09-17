@@ -152,8 +152,9 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
         pp_page.abrir_resultado(page, hp)
         captura(page, hp, "02_ficha_abierta")
 
+        texto_esperado = pp_page.nombre_mostrado(analista_objetivo)
         analista_actual = pp_page.leer_analista_actual(page)
-        if analista_actual and analista_actual.strip() == analista_objetivo.strip():
+        if analista_actual and analista_actual.strip() == texto_esperado.strip():
             return "omitida", f"Ya estaba asignada a {analista_actual}"
 
         nota_cerrada = ""
@@ -190,7 +191,7 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
             # Post-condición: si algo bloqueó el envío sin lanzar excepción,
             # no dar el resultado por bueno solo porque el modal se cerró.
             nuevo_analista = pp_page.leer_analista_actual(page)
-            if not nuevo_analista or nuevo_analista.strip() != analista_objetivo.strip():
+            if not nuevo_analista or nuevo_analista.strip() != texto_esperado.strip():
                 captura(page, hp, "99_error")
                 return "error", (
                     f"Tras confirmar, la ficha muestra '{nuevo_analista}' "

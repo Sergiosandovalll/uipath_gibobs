@@ -7,32 +7,40 @@ Citrix), usando el botón "Reasignar" del bloque "Analista" de la ficha.
 
 ## Estado actual
 
-⚠️ **PENDIENTE DE `playwright codegen` REAL.** Los selectores de
-`persefone_page.py` son placeholders razonables basados en la descripción
-funcional del flujo (búsqueda, ficha, modal, desplegable, confirmar/
-cancelar), **no** en el DOM real de Persefone — Persefone es un sistema
-distinto de Hadmin, con interfaz y DOM propios. El resto del robot
-(orquestación, CSV, logs, reanudación, capturas, contador de tiempo) sigue
-las mismas convenciones que `robot-cierre-hadmin` y no debería necesitar
-cambios cuando se rellenen los selectores reales.
+⚠️ **PARCIALMENTE CONFIRMADO con `playwright codegen` real.** Confirmado:
+login (redirección a `/login` cuando no hay sesión), buscador "Búsqueda
+general", resultado de búsqueda por HP, apertura del modal "Reasignar
+operación" (combobox con búsqueda de texto) y botón "Confirmar". **Sin
+confirmar todavía** (ver los `TODO` en `persefone_page.py`):
 
-### Cómo terminar de verificarlo
+- `leer_analista_actual` — no se grabó el bloque "Analista" de "Ficha
+  cliente" (necesario para el caso "ya asignada" y para la verificación
+  posterior a confirmar).
+- `operacion_esta_cerrada` — no se grabó ningún indicador de cierre.
+- `cancelar` — solo se probó "Confirmar", no "Cancelar" (el que usa el
+  dry-run).
+- El botón "Reasignar" se localiza con `.first` sobre todo el texto
+  "Reasignar" de la página. Funcionó en la grabación real, pero **depende
+  del orden del DOM** entre los bloques "Analista" y "Cualificador" y no
+  está verificado de forma robusta. Ver el aviso completo al principio de
+  `persefone_page.py`.
+- El nombre que muestra el desplegable para "Ana Gisela Gonçalves" es, en
+  realidad, **"Ana Gonçalves"** (sin "Gisela") — ya está mapeado en
+  `NOMBRE_MOSTRADO_PERSEFONE` en `persefone_page.py`. Falta confirmar si
+  "Miguel Cerezal" aparece igual o distinto.
 
-1. Instala dependencias (ver más abajo) y ejecuta:
+### Verificación obligatoria antes de `--produccion`
 
-   ```bash
-   playwright codegen https://persefone.gibobs.gibobs.one/dashboard
-   ```
-
-2. Haz a mano el flujo completo: buscar un HP, abrir la ficha, pulsar
-   "Reasignar" del bloque **Analista** (nunca el de "Cualificador"),
-   elegir un analista en el desplegable del modal "Reasignar operación",
-   y probar tanto "Confirmar" como "Cancelar".
-3. Sustituye cada función correspondiente en `persefone_page.py` (todas
-   están marcadas con `TODO: confirmar con codegen`) por los selectores
-   reales capturados. Es el único archivo que depende del DOM de
-   Persefone: `robot_reasignacion.py` no debe tocarse para esto.
-4. Verifica primero en dry-run (por defecto) antes de usar `--produccion`.
+1. Ejecuta primero en dry-run (por defecto) contra una o dos operaciones de
+   prueba.
+2. Revisa `debug/<HP>_03_modal_abierto.png`: confirma a simple vista que el
+   modal abierto corresponde a "Analista" y no a "Cualificador".
+3. Completa los `TODO` pendientes (ideal: repetir `playwright codegen`
+   sobre una ficha real, abriendo la sección "Ficha cliente" y mirando el
+   bloque "Analista", y probando el botón "Cancelar" del modal) y
+   sustitúyelos en `persefone_page.py` — es el único archivo que depende
+   del DOM de Persefone.
+4. Solo entonces usa `--produccion`.
 
 ## Reglas de negocio implementadas
 
