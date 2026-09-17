@@ -1,5 +1,6 @@
 storage_state.json
 operaciones.csv
+prueba.csv
 logs/resultado_reasignacion_*.csv
 debug/
 __pycache__/
