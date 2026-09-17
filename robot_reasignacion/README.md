@@ -11,9 +11,10 @@ Citrix), usando el botón "Reasignar" del bloque "Analista" de la ficha.
 login (redirección a `/login` cuando no hay sesión), buscador "Búsqueda
 general", resultado de búsqueda por HP, apertura del modal "Reasignar
 operación" (combobox con búsqueda de texto), botones "Confirmar" y
-"Cancelar", la notificación de éxito que aparece tras confirmar (se cierra
-sola), que el bloque "Analista" siempre precede al de "Cualificador" (así
-que `.first` sobre "Reasignar" es seguro), el banner de operación cerrada
+"Cancelar" (la reasignación queda aplicada al pulsar "Confirmar", sin
+pasos adicionales), que el bloque "Analista" siempre precede al de
+"Cualificador" (así que `.first` sobre "Reasignar" es seguro), el banner
+de operación cerrada
 ("Operación cerrada por: ...") y el texto real que muestra el desplegable
 para cada analista (ver más abajo). **Solo queda un `TODO`** en
 `persefone_page.py`:

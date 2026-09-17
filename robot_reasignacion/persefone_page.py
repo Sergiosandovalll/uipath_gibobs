@@ -8,8 +8,8 @@ robot_reasignacion.py no debe conocer selectores.
 
 ⚠️ ESTADO: CASI TODO CONFIRMADO con `playwright codegen` real (login,
 búsqueda, apertura de resultado, apertura del modal, desplegable con
-búsqueda por texto, "Confirmar", "Cancelar", notificación de éxito y
-banner de operación cerrada). Solo queda un TODO explícito:
+búsqueda por texto, "Confirmar", "Cancelar" y banner de operación
+cerrada). Solo queda un TODO explícito:
 
 - `leer_analista_actual`: no se grabó el bloque "Analista" de "Ficha
   cliente" (no es algo que capture `codegen`, que solo graba acciones, no
@@ -187,16 +187,11 @@ def confirmar(dialogo):
     """Pulsa "Confirmar" en el modal: aplica la reasignación real.
 
     Confirmado por codegen: get_by_role("button", name="Confirmar"). Tras
-    confirmar aparece una notificación de éxito con un botón de cierre con
-    aria-label "Close" (en inglés, heredado del componente de
-    notificaciones aunque el resto de la interfaz esté en español);
-    confirmado por codegen que hay que cerrarla. Se hace en best-effort
-    para no romper el flujo si alguna vez no aparece."""
+    confirmar aparece una notificación de éxito con un botón "Close", pero
+    es solo del panel de la ficha (para cerrarla y volver a buscar), no
+    parte del flujo de confirmación en sí: la reasignación ya queda
+    aplicada al pulsar "Confirmar", sin pasos adicionales."""
     dialogo.get_by_role("button", name="Confirmar", exact=True).click()
-    try:
-        dialogo.page.get_by_role("button", name="Close").click(timeout=2000)
-    except PlaywrightTimeoutError:
-        pass
 
 
 def cancelar(dialogo):
