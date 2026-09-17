@@ -12,19 +12,18 @@ búsqueda por texto y "Confirmar"). Lo que queda como TODO explícito abajo
 NO se llegó a grabar todavía y sigue siendo una hipótesis razonable:
 
 - `leer_analista_actual`: no se grabó el bloque "Analista" de "Ficha
-  cliente". Hace falta abrir una ficha y capturar cómo se lee ese valor.
-- `operacion_esta_cerrada`: no se grabó ningún indicador de cierre.
+  cliente" (no es algo que capture `codegen`, que solo graba acciones, no
+  lecturas). Sigue como placeholder hasta tener el locator exacto — la
+  forma más simple de conseguirlo sin tocar código a ciegas es con el botón
+  "Pick locator" del Playwright Inspector (icono de mira en la barra de
+  herramientas que aparece junto al navegador al lanzar `codegen`): clic
+  ahí y luego clic sobre el nombre del analista en la ficha, sin que se
+  dispare ninguna acción real, y copiar el locator que muestra el panel.
 - `cancelar`: no se probó el botón "Cancelar" del modal (solo "Confirmar").
 - El botón "Reasignar" se localiza con `.first` sobre todo el texto
-  "Reasignar" de la página (así es como funcionó en la grabación real),
-  pero eso depende de que el bloque "Analista" aparezca siempre ANTES que
-  el de "Cualificador" en el DOM. Es un riesgo de negocio real (la ficha
-  tiene DOS botones "Reasignar" y el robot NUNCA debe tocar el de
-  "Cualificador"). Mitigación obligatoria: antes de cualquier ejecución en
-  --produccion, revisa a mano la primera captura
-  `debug/<HP>_03_modal_abierto.png` de una tanda en dry-run y confirma que
-  el modal que se abrió corresponde a "Analista". En dry-run no hay riesgo
-  real (se cancela siempre), así que es un buen punto de verificación.
+  "Reasignar" de la página. Confirmado como definitivo: el bloque
+  "Analista" siempre va antes que el de "Cualificador" en la ficha, así que
+  `.first` siempre corresponde a Analista.
 """
 import re
 import time
@@ -143,14 +142,18 @@ def operacion_esta_cerrada(page):
     """Indica si la operación está cerrada (para añadir la nota
     correspondiente en el log, no para bloquear la reasignación).
 
-    TODO: NO CONFIRMADO CON CODEGEN. No se grabó ningún indicador de cierre
-    en Persefone. Placeholder heredado del patrón de Hadmin (botón
-    "Finalizar" ausente o deshabilitado): hay que verificar si existe algo
-    equivalente en Persefone."""
-    boton = page.get_by_role("button", name="Finalizar")
-    if boton.count() == 0:
-        return True
-    return boton.first.is_disabled()
+    Persefone muestra un banner rojo en la parte superior de la ficha
+    avisando de que está cerrada. Se busca cualquier texto visible que
+    contenga "cerrad" (cubre "cerrada"/"cerrado") en vez de un texto
+    literal exacto, porque no se ha confirmado la redacción exacta del
+    banner — es un heurístico de bajo riesgo ya que solo añade una nota al
+    log, nunca bloquea la reasignación. Si el texto exacto del banner se
+    confirma más adelante, se puede ajustar aquí para mayor precisión."""
+    banner = page.get_by_text(re.compile("cerrad", re.IGNORECASE))
+    for i in range(banner.count()):
+        if banner.nth(i).is_visible():
+            return True
+    return False
 
 
 def click_reasignar_analista(page):
@@ -159,11 +162,9 @@ def click_reasignar_analista(page):
     del diálogo abierto.
 
     Confirmado por codegen que `get_by_text("Reasignar").first` abre
-    efectivamente el modal de reasignación de Analista en el flujo grabado.
-    ⚠️ Esto depende del orden del DOM (bloque Analista antes que
-    Cualificador) y NO está verificado de forma robusta — ver aviso al
-    principio del archivo sobre la verificación manual obligatoria antes de
-    producción."""
+    efectivamente el modal de reasignación de Analista en el flujo grabado,
+    y confirmado también que el bloque "Analista" siempre precede al de
+    "Cualificador" en el DOM de la ficha, así que `.first` es seguro."""
     page.get_by_text("Reasignar").first.click()
 
     dialogo = page.get_by_role("dialog", name=DIALOG_NAME)
