@@ -203,17 +203,24 @@ def seleccionar_analista(dialogo, analista_objetivo):
     y selecciona el analista objetivo.
 
     Confirmado por codegen: `get_by_role("combobox")` dentro del diálogo;
-    se hace clic, se escribe el primer nombre para filtrar (igual que en la
-    grabación, que escribió "Ana") y se hace clic en la opción visible con
-    el texto exacto que muestra Persefone (ver `NOMBRE_MOSTRADO_PERSEFONE`,
-    que no siempre coincide con el nombre completo del CSV)."""
+    se hace clic y se escribe para filtrar. Se usan las dos primeras
+    palabras del nombre mostrado (no solo la primera) como término de
+    búsqueda: con solo el nombre de pila (p.ej. "Miguel") pueden aparecer
+    varios analistas distintos en la lista (visto en producción: salía
+    también "Miguel Ángel Sánchez"), lo que aumenta el riesgo de que la
+    lista virtualizada del desplegable tape o recicle la fila justo al
+    hacer clic. Tras seleccionar, se da un margen para que el desplegable
+    termine de cerrarse del todo (visto en producción: a veces se quedaba
+    abierto tapando el botón "Confirmar" y bloqueaba el clic)."""
     texto_mostrado = nombre_mostrado(analista_objetivo)
-    termino_busqueda = texto_mostrado.split()[0]
+    partes = texto_mostrado.split()
+    termino_busqueda = " ".join(partes[:2]) if len(partes) >= 2 else texto_mostrado
 
     combobox = dialogo.get_by_role("combobox")
     combobox.click()
     combobox.fill(termino_busqueda)
     click_texto_visible(dialogo.page, texto_mostrado, exact=True)
+    dialogo.page.wait_for_timeout(1500)
 
 
 def confirmar(dialogo):

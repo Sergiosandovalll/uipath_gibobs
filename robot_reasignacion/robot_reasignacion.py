@@ -190,7 +190,20 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
         if produccion:
             # Post-condición: si algo bloqueó el envío sin lanzar excepción,
             # no dar el resultado por bueno solo porque el modal se cerró.
+            # La ficha puede tardar un instante en refrescar el nombre tras
+            # confirmar (visto en producción: una reasignación que sí se
+            # había aplicado de verdad se leyó con el nombre antiguo por
+            # comprobarlo demasiado pronto), así que se reintenta durante
+            # unos segundos antes de dar el error por bueno.
+            limite_verificacion = time.time() + 4
             nuevo_analista = pp_page.leer_analista_actual(page)
+            while (
+                nuevo_analista.strip() != texto_esperado.strip()
+                and time.time() < limite_verificacion
+            ):
+                time.sleep(0.5)
+                nuevo_analista = pp_page.leer_analista_actual(page)
+
             if not nuevo_analista or nuevo_analista.strip() != texto_esperado.strip():
                 captura(page, hp, "99_error")
                 return "error", (
