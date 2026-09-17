@@ -7,15 +7,16 @@ Citrix), usando el botón "Reasignar" del bloque "Analista" de la ficha.
 
 ## Estado actual
 
-⚠️ **PARCIALMENTE CONFIRMADO con `playwright codegen` real.** Confirmado:
+⚠️ **CASI TODO CONFIRMADO con `playwright codegen` real.** Confirmado:
 login (redirección a `/login` cuando no hay sesión), buscador "Búsqueda
 general", resultado de búsqueda por HP, apertura del modal "Reasignar
-operación" (combobox con búsqueda de texto), botón "Confirmar", que el
-bloque "Analista" siempre precede al de "Cualificador" (así que `.first`
-sobre "Reasignar" es seguro) y el heurístico de operación cerrada (banner
-rojo superior, detectado buscando cualquier texto visible que contenga
-"cerrad"). **Sin confirmar todavía** (ver los `TODO` en
-`persefone_page.py`):
+operación" (combobox con búsqueda de texto), botones "Confirmar" y
+"Cancelar", la notificación de éxito que aparece tras confirmar (se cierra
+sola), que el bloque "Analista" siempre precede al de "Cualificador" (así
+que `.first` sobre "Reasignar" es seguro), el banner de operación cerrada
+("Operación cerrada por: ...") y el texto real que muestra el desplegable
+para cada analista (ver más abajo). **Solo queda un `TODO`** en
+`persefone_page.py`:
 
 - `leer_analista_actual` — no se grabó el bloque "Analista" de "Ficha
   cliente" (necesario para el caso "ya asignada" y para la verificación
@@ -23,19 +24,25 @@ rojo superior, detectado buscando cualquier texto visible que contenga
   forma más simple de conseguir el locator es con el botón "Pick locator"
   (icono de mira) del Playwright Inspector, haciendo clic ahí y luego sobre
   el nombre del analista, sin disparar ninguna acción real.
-- `cancelar` — solo se probó "Confirmar", no "Cancelar" (el que usa el
-  dry-run).
-- El nombre que muestra el desplegable para "Ana Gisela Gonçalves" es, en
-  realidad, **"Ana Gonçalves"** (sin "Gisela") — ya está mapeado en
-  `NOMBRE_MOSTRADO_PERSEFONE` en `persefone_page.py`. Falta confirmar si
-  "Miguel Cerezal" aparece igual o distinto.
+
+### Nombres mostrados por Persefone vs. el CSV
+
+El desplegable no siempre muestra el nombre tal como viene en el CSV:
+
+| CSV (`operaciones.csv`) | Texto real en Persefone |
+|---|---|
+| Miguel Cerezal | Miguel Cerezal Jiménez |
+| Ana Gisela Gonçalves | Ana Gonçalves |
+
+Está mapeado en `NOMBRE_MOSTRADO_PERSEFONE` (`persefone_page.py`) — es el
+único sitio a tocar si cambia para alguno de los dos, o si se añaden más
+analistas al CSV en el futuro.
 
 ### Antes de usar `--produccion`
 
-1. Completa los `TODO` pendientes (el locator de "Analista" con "Pick
-   locator", y probar el botón "Cancelar" del modal) en
-   `persefone_page.py` — es el único archivo que depende del DOM de
-   Persefone.
+1. Completa el `TODO` pendiente (el locator de "Analista" con "Pick
+   locator") en `persefone_page.py` — es el único archivo que depende del
+   DOM de Persefone.
 2. Ejecuta primero en dry-run (por defecto) contra una o dos operaciones de
    prueba y revisa el log y las capturas en `debug/`.
 3. Solo entonces usa `--produccion`.

@@ -6,10 +6,10 @@ Este es el único archivo que depende de la estructura concreta de la
 interfaz de Persefone: si algo cambia en el DOM, se toca aquí.
 robot_reasignacion.py no debe conocer selectores.
 
-⚠️ ESTADO: PARCIALMENTE CONFIRMADO con `playwright codegen` real (login,
+⚠️ ESTADO: CASI TODO CONFIRMADO con `playwright codegen` real (login,
 búsqueda, apertura de resultado, apertura del modal, desplegable con
-búsqueda por texto y "Confirmar"). Lo que queda como TODO explícito abajo
-NO se llegó a grabar todavía y sigue siendo una hipótesis razonable:
+búsqueda por texto, "Confirmar", "Cancelar", notificación de éxito y
+banner de operación cerrada). Solo queda un TODO explícito:
 
 - `leer_analista_actual`: no se grabó el bloque "Analista" de "Ficha
   cliente" (no es algo que capture `codegen`, que solo graba acciones, no
@@ -19,11 +19,11 @@ NO se llegó a grabar todavía y sigue siendo una hipótesis razonable:
   herramientas que aparece junto al navegador al lanzar `codegen`): clic
   ahí y luego clic sobre el nombre del analista en la ficha, sin que se
   dispare ninguna acción real, y copiar el locator que muestra el panel.
-- `cancelar`: no se probó el botón "Cancelar" del modal (solo "Confirmar").
-- El botón "Reasignar" se localiza con `.first` sobre todo el texto
-  "Reasignar" de la página. Confirmado como definitivo: el bloque
-  "Analista" siempre va antes que el de "Cualificador" en la ficha, así que
-  `.first` siempre corresponde a Analista.
+
+El botón "Reasignar" se localiza con `.first` sobre todo el texto
+"Reasignar" de la página. Confirmado como definitivo: el bloque "Analista"
+siempre va antes que el de "Cualificador" en la ficha, así que `.first`
+siempre corresponde a Analista.
 """
 import re
 import time
@@ -34,16 +34,15 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 DIALOG_NAME = "Reasignar operación"
 
 # Mapeo entre el nombre del analista tal como viene en el CSV (nombre
-# completo "oficial") y el texto que muestra realmente el desplegable de
-# Persefone. Confirmado por codegen para Ana Gisela Gonçalves: al escribir
-# "Ana" en el combobox, la opción que aparece es "Ana Gonçalves" (sin
-# "Gisela"). Para Miguel Cerezal se asume que coincide tal cual porque no
-# hay indicio de lo contrario, pero **falta confirmarlo** con un dry-run
-# real. Si Persefone muestra otro texto para alguno de los dos, ajusta este
+# "oficial") y el texto que muestra realmente el desplegable de Persefone.
+# Ambos confirmados por codegen: al escribir "Ana" en el combobox aparece
+# "Ana Gonçalves" (sin "Gisela"); al escribir "Miguel" aparece "Miguel
+# Cerezal Jiménez" (con el apellido "Jiménez", que no está en el CSV). Si
+# Persefone cambia el texto que muestra para alguno de los dos, ajusta este
 # diccionario (es el único sitio que hay que tocar).
 NOMBRE_MOSTRADO_PERSEFONE = {
-    "Miguel Cerezal": "Miguel Cerezal",  # TODO: confirmar en dry-run
-    "Ana Gisela Gonçalves": "Ana Gonçalves",  # confirmado por codegen
+    "Miguel Cerezal": "Miguel Cerezal Jiménez",
+    "Ana Gisela Gonçalves": "Ana Gonçalves",
 }
 
 
@@ -142,18 +141,12 @@ def operacion_esta_cerrada(page):
     """Indica si la operación está cerrada (para añadir la nota
     correspondiente en el log, no para bloquear la reasignación).
 
-    Persefone muestra un banner rojo en la parte superior de la ficha
-    avisando de que está cerrada. Se busca cualquier texto visible que
-    contenga "cerrad" (cubre "cerrada"/"cerrado") en vez de un texto
-    literal exacto, porque no se ha confirmado la redacción exacta del
-    banner — es un heurístico de bajo riesgo ya que solo añade una nota al
-    log, nunca bloquea la reasignación. Si el texto exacto del banner se
-    confirma más adelante, se puede ajustar aquí para mayor precisión."""
-    banner = page.get_by_text(re.compile("cerrad", re.IGNORECASE))
-    for i in range(banner.count()):
-        if banner.nth(i).is_visible():
-            return True
-    return False
+    Confirmado por captura real: Persefone muestra un banner rojo en la
+    parte superior de la ficha con el texto "Operación cerrada por: <nombre
+    o '-'>" y "Fecha de cierre: <fecha>" (además de motivo/nota, que sí
+    varían). Se busca solo "Operación cerrada por", la parte estable del
+    banner."""
+    return page.get_by_text("Operación cerrada por", exact=False).first.is_visible()
 
 
 def click_reasignar_analista(page):
@@ -193,15 +186,21 @@ def seleccionar_analista(dialogo, analista_objetivo):
 def confirmar(dialogo):
     """Pulsa "Confirmar" en el modal: aplica la reasignación real.
 
-    Confirmado por codegen: get_by_role("button", name="Confirmar")."""
+    Confirmado por codegen: get_by_role("button", name="Confirmar"). Tras
+    confirmar aparece una notificación de éxito con un botón de cierre con
+    aria-label "Close" (en inglés, heredado del componente de
+    notificaciones aunque el resto de la interfaz esté en español);
+    confirmado por codegen que hay que cerrarla. Se hace en best-effort
+    para no romper el flujo si alguna vez no aparece."""
     dialogo.get_by_role("button", name="Confirmar", exact=True).click()
+    try:
+        dialogo.page.get_by_role("button", name="Close").click(timeout=2000)
+    except PlaywrightTimeoutError:
+        pass
 
 
 def cancelar(dialogo):
     """Pulsa "Cancelar" en el modal: no aplica ningún cambio (dry-run).
 
-    TODO: NO CONFIRMADO CON CODEGEN. La grabación solo probó "Confirmar".
-    Se asume que el botón se llama "Cancelar" (mismo patrón que Hadmin y que
-    el resto de modales de la aplicación), pero hay que verificarlo en el
-    primer dry-run real."""
+    Confirmado por codegen: get_by_role("button", name="Cancelar")."""
     dialogo.get_by_role("button", name="Cancelar", exact=True).click()
