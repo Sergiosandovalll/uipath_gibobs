@@ -7,24 +7,18 @@ Citrix), usando el botón "Reasignar" del bloque "Analista" de la ficha.
 
 ## Estado actual
 
-⚠️ **CASI TODO CONFIRMADO con `playwright codegen` real.** Confirmado:
-login (redirección a `/login` cuando no hay sesión), buscador "Búsqueda
-general", resultado de búsqueda por HP, apertura del modal "Reasignar
-operación" (combobox con búsqueda de texto), botones "Confirmar" y
-"Cancelar" (la reasignación queda aplicada al pulsar "Confirmar", sin
-pasos adicionales), que el bloque "Analista" siempre precede al de
-"Cualificador" (así que `.first` sobre "Reasignar" es seguro), el banner
-de operación cerrada
-("Operación cerrada por: ...") y el texto real que muestra el desplegable
-para cada analista (ver más abajo). **Solo queda un `TODO`** en
-`persefone_page.py`:
-
-- `leer_analista_actual` — no se grabó el bloque "Analista" de "Ficha
-  cliente" (necesario para el caso "ya asignada" y para la verificación
-  posterior a confirmar). `codegen` no graba lecturas, solo acciones: la
-  forma más simple de conseguir el locator es con el botón "Pick locator"
-  (icono de mira) del Playwright Inspector, haciendo clic ahí y luego sobre
-  el nombre del analista, sin disparar ninguna acción real.
+✅ **TODO CONFIRMADO contra el sistema real** (codegen + capturas).
+Confirmado: login (redirección a `/login` cuando no hay sesión), buscador
+"Búsqueda general", resultado de búsqueda por HP, apertura del modal
+"Reasignar operación" (combobox con búsqueda de texto), botones
+"Confirmar" y "Cancelar" (la reasignación queda aplicada al pulsar
+"Confirmar", sin pasos adicionales), que el bloque "Analista" siempre
+precede al de "Cualificador" (así que `.first` sobre "Reasignar" es
+seguro), el banner de operación cerrada ("Operación cerrada por: ..."), el
+texto real que muestra el desplegable para cada analista (ver más abajo),
+y la lectura del analista actual en la ficha (nombre y apellidos en dos
+elementos separados, junto al botón "Reasignar"). No quedan `TODO` de
+selectores en `persefone_page.py`.
 
 ### Nombres mostrados por Persefone vs. el CSV
 
@@ -41,12 +35,9 @@ analistas al CSV en el futuro.
 
 ### Antes de usar `--produccion`
 
-1. Completa el `TODO` pendiente (el locator de "Analista" con "Pick
-   locator") en `persefone_page.py` — es el único archivo que depende del
-   DOM de Persefone.
-2. Ejecuta primero en dry-run (por defecto) contra una o dos operaciones de
+1. Ejecuta primero en dry-run (por defecto) contra una o dos operaciones de
    prueba y revisa el log y las capturas en `debug/`.
-3. Solo entonces usa `--produccion`.
+2. Solo entonces usa `--produccion`.
 
 ## Reglas de negocio implementadas
 

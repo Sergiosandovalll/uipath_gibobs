@@ -6,19 +6,10 @@ Este es el único archivo que depende de la estructura concreta de la
 interfaz de Persefone: si algo cambia en el DOM, se toca aquí.
 robot_reasignacion.py no debe conocer selectores.
 
-⚠️ ESTADO: CASI TODO CONFIRMADO con `playwright codegen` real (login,
-búsqueda, apertura de resultado, apertura del modal, desplegable con
-búsqueda por texto, "Confirmar", "Cancelar" y banner de operación
-cerrada). Solo queda un TODO explícito:
-
-- `leer_analista_actual`: no se grabó el bloque "Analista" de "Ficha
-  cliente" (no es algo que capture `codegen`, que solo graba acciones, no
-  lecturas). Sigue como placeholder hasta tener el locator exacto — la
-  forma más simple de conseguirlo sin tocar código a ciegas es con el botón
-  "Pick locator" del Playwright Inspector (icono de mira en la barra de
-  herramientas que aparece junto al navegador al lanzar `codegen`): clic
-  ahí y luego clic sobre el nombre del analista en la ficha, sin que se
-  dispare ninguna acción real, y copiar el locator que muestra el panel.
+⚠️ ESTADO: TODO CONFIRMADO contra el sistema real (login, búsqueda,
+apertura de resultado, apertura del modal, desplegable con búsqueda por
+texto, "Confirmar", "Cancelar", banner de operación cerrada y lectura del
+analista actual en la ficha). No quedan TODO pendientes de selectores.
 
 El botón "Reasignar" se localiza con `.first` sobre todo el texto
 "Reasignar" de la página. Confirmado como definitivo: el bloque "Analista"
@@ -130,11 +121,34 @@ def leer_analista_actual(page):
     """Lee el nombre del analista actualmente asignado, en el bloque
     "Analista" de "Ficha cliente".
 
-    TODO: NO CONFIRMADO CON CODEGEN. No se grabó este paso todavía. Hace
-    falta abrir una ficha real y capturar cómo se muestra este dato para
-    reemplazar el placeholder de abajo."""
-    bloque = page.locator("text=Analista").first.locator("xpath=..")
-    return bloque.inner_text().replace("Analista", "").strip()
+    Confirmado por captura real: el nombre se pinta en dos líneas
+    separadas (nombre y apellidos, cada una en su propio elemento), junto
+    a una foto de avatar y el propio botón "Reasignar", bajo una etiqueta
+    "Analista". Se localiza el bloque subiendo desde el mismo botón
+    "Reasignar" que usa `click_reasignar_analista` (garantiza que es el
+    bloque de Analista, no el de Cualificador) hasta el ancestro más
+    cercano que también contenga el texto "Analista", sin depender de un
+    número fijo de niveles del DOM.
+
+    Se recompone el nombre concatenando el texto de los nodos hoja del
+    bloque con JavaScript (`textContent`, no `inner_text()`): la interfaz
+    pinta el nombre en mayúsculas con CSS (`text-transform: uppercase`),
+    pero el texto real en el DOM conserva mayúsculas/minúsculas normales,
+    que es como viene también en el CSV (p.ej. "Ana Gisela Gonçalves")."""
+    reasignar = page.get_by_text("Reasignar").first
+    bloque = reasignar.locator("xpath=ancestor::*[.//text()[contains(., 'Analista')]][1]")
+    return bloque.evaluate(
+        """(el) => {
+            const partes = [];
+            el.querySelectorAll('*').forEach((nodo) => {
+                if (nodo.children.length === 0) {
+                    const texto = (nodo.textContent || '').trim();
+                    if (texto) partes.push(texto);
+                }
+            });
+            return partes.filter((t) => t !== 'Analista' && t !== 'Reasignar').join(' ');
+        }"""
+    )
 
 
 def operacion_esta_cerrada(page):
