@@ -257,7 +257,11 @@ def seleccionar_analista(dialogo, analista_objetivo):
     combobox = dialogo.get_by_role("combobox")
     combobox.click()
     combobox.fill(termino_busqueda)
-    click_texto_visible(dialogo.page, texto_mostrado, exact=True)
+    # El desplegable busca contra el backend (se ve un estado de "cargando"
+    # mientras filtra), así que puede tardar más de los 5s por defecto bajo
+    # carga (visto en producción, con la opción ya visible en pantalla pero
+    # el robot dándose por vencido antes de encontrarla).
+    click_texto_visible(dialogo.page, texto_mostrado, exact=True, timeout=8000)
 
     listbox = dialogo.page.get_by_role("listbox")
     limite = time.time() + 2
