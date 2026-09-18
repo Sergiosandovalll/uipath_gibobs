@@ -199,22 +199,33 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
         if produccion:
             # Post-condición: si algo bloqueó el envío sin lanzar excepción,
             # no dar el resultado por bueno solo porque el modal se cerró.
-            # La ficha puede tardar un instante en refrescar el nombre tras
-            # confirmar (visto varias veces en producción: reasignaciones
-            # que sí se habían aplicado de verdad se leyeron con el nombre
-            # antiguo por comprobarlo demasiado pronto), así que se
-            # reintenta durante varios segundos antes de dar el error por
-            # bueno. Con el ritmo más rápido entre operaciones hay menos
-            # margen "gratis" para que el backend se ponga al día, así que
-            # la ventana se amplió de 4 a 10 segundos.
+            # Confirmado con capturas: al pulsar "Confirmar", Persefone
+            # cierra el panel de la ficha y vuelve a la vista de resultados
+            # de búsqueda (la URL pasa a /search/HP-XXX). El "Analista" que
+            # se ve ahí es un resumen de búsqueda que puede tardar minutos
+            # en actualizarse — NO sirve para verificar, y además el handle
+            # de "Reasignar" que teníamos apuntaba a la ficha ya cerrada
+            # (por eso a veces se leía vacío). Se reabre la ficha de verdad
+            # y se lee el bloque de Analista de dentro, reintentando unos
+            # segundos por si el propio reabrir tarda en reflejar el
+            # cambio.
             limite_verificacion = time.time() + 10
-            nuevo_analista = pp_page.leer_analista_actual(boton_reasignar)
+            boton_verificacion = boton_reasignar
+            try:
+                pp_page.buscar_operacion(page, hp)
+                pp_page.hay_resultado(page, hp).first.wait_for(state="visible", timeout=8000)
+                pp_page.abrir_resultado(page, hp)
+                boton_verificacion = pp_page.obtener_boton_reasignar(page)
+            except PlaywrightTimeoutError:
+                pass  # se reintenta abajo con el handle que haya, mejor que nada
+
+            nuevo_analista = pp_page.leer_analista_actual(boton_verificacion)
             while (
                 nuevo_analista.strip() != texto_esperado.strip()
                 and time.time() < limite_verificacion
             ):
                 time.sleep(0.5)
-                nuevo_analista = pp_page.leer_analista_actual(boton_reasignar)
+                nuevo_analista = pp_page.leer_analista_actual(boton_verificacion)
 
             if not nuevo_analista or nuevo_analista.strip() != texto_esperado.strip():
                 captura(page, hp, "99_error")
