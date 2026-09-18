@@ -161,7 +161,10 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
         texto_esperado = pp_page.nombre_ficha(analista_objetivo)
         analista_actual = pp_page.leer_analista_actual(boton_reasignar)
         if analista_actual and analista_actual.strip() == texto_esperado.strip():
-            return "omitida", f"Ya estaba asignada a {analista_actual}"
+            # Se registra como "ok" (no "omitida"): el estado objetivo ya
+            # está conseguido, así que en una reanudación futura debe
+            # contar como hecha y no reabrir esta ficha otra vez.
+            return "ok", f"Ya estaba asignada a {analista_actual}"
 
         nota_cerrada = ""
         if pp_page.operacion_esta_cerrada(page):
@@ -197,11 +200,14 @@ def procesar_operacion(page, hp, analista_objetivo, produccion):
             # Post-condición: si algo bloqueó el envío sin lanzar excepción,
             # no dar el resultado por bueno solo porque el modal se cerró.
             # La ficha puede tardar un instante en refrescar el nombre tras
-            # confirmar (visto en producción: una reasignación que sí se
-            # había aplicado de verdad se leyó con el nombre antiguo por
-            # comprobarlo demasiado pronto), así que se reintenta durante
-            # unos segundos antes de dar el error por bueno.
-            limite_verificacion = time.time() + 4
+            # confirmar (visto varias veces en producción: reasignaciones
+            # que sí se habían aplicado de verdad se leyeron con el nombre
+            # antiguo por comprobarlo demasiado pronto), así que se
+            # reintenta durante varios segundos antes de dar el error por
+            # bueno. Con el ritmo más rápido entre operaciones hay menos
+            # margen "gratis" para que el backend se ponga al día, así que
+            # la ventana se amplió de 4 a 10 segundos.
+            limite_verificacion = time.time() + 10
             nuevo_analista = pp_page.leer_analista_actual(boton_reasignar)
             while (
                 nuevo_analista.strip() != texto_esperado.strip()
