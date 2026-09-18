@@ -135,44 +135,39 @@ def leer_analista_actual(boton_reasignar):
     "Analista" de "Ficha cliente", a partir del ElementHandle fijo que
     devuelve `obtener_boton_reasignar`.
 
-    Confirmado por captura real (HTML real inspeccionado): "Ficha
-    cliente", "Analista" y "Otros datos" viven TODAS dentro de una única
-    tarjeta compartida (no son tres tarjetas separadas), y dentro de esa
-    misma columna, "Analista" y "Cualificador" son bloques consecutivos
-    (nombre en dos líneas + avatar + "Reasignar", uno debajo del otro,
-    seguidos de las fechas). Por eso NO se puede subir buscando "el
-    ancestro más cercano que contenga el texto 'Analista'": esa etiqueta
-    también aparece dentro del contenedor grande que engloba Cualificador
-    y las fechas, y se acaba leyendo de más (bug real visto en producción:
-    se leyó "... Cualificador Cristina Perez Fecha de creación...").
+    Confirmado con el HTML real (outerHTML inspeccionado): la estructura
+    exacta, subiendo desde el propio `<a>` "Reasignar", es:
 
-    En su lugar, se sube desde el propio botón "Reasignar" nivel a nivel,
-    y se para en cuanto el texto acumulado empieza a incluir "Cualificador"
-    o "Fecha de creaci" — así nunca se cuela el bloque de al lado. El
-    nombre se recompone concatenando el texto de los nodos hoja del último
-    nivel "seguro" con JavaScript (`textContent`, no `inner_text()`): la
+        a "Reasignar"
+          └─ div (flex, fila con avatar+nombre y el propio "Reasignar")   [1 nivel]
+              └─ div.ant-col-24 (SOLO avatar + nombre + "Reasignar")      [2 niveles]
+
+    Ese div.ant-col-24 de 2 niveles arriba no contiene nada de
+    "Cualificador" ni de las fechas — son bloques HERMANOS (otros
+    div.ant-col-24 dentro del mismo div.ant-row), no ancestros. Por eso
+    subir un número FIJO de 2 niveles es exacto, y no depende de si la
+    ficha tiene además un bloque "Gestor documental" u otro entre medias
+    (bug real visto en producción: la heurística anterior, que subía y
+    paraba al ver el texto "Cualificador" o "Fecha de creaci", fallaba en
+    fichas con capas de más antes de llegar a esas palabras).
+
+    El nombre se recompone concatenando el texto de los nodos hoja de ese
+    contenedor con JavaScript (`textContent`, no `inner_text()`): la
     interfaz pinta el nombre en mayúsculas con CSS (`text-transform:
     uppercase`), pero el texto real en el DOM conserva mayúsculas/
     minúsculas normales, que es como viene también en el CSV (p.ej. "Ana
     Gisela Gonçalves")."""
     return boton_reasignar.evaluate(
         """(el) => {
-            let nodo = el;
-            let seguro = null;
-            for (let i = 0; i < 6 && nodo.parentElement; i++) {
-                nodo = nodo.parentElement;
-                const texto = nodo.textContent.trim();
-                if (texto.includes('Cualificador') || texto.includes('Fecha de creaci')) {
-                    break;
-                }
-                seguro = nodo;
-            }
-            const contenedor = seguro || el.parentElement || el;
+            const contenedor =
+                (el.parentElement && el.parentElement.parentElement) ||
+                el.parentElement ||
+                el;
             const partes = [];
             contenedor.querySelectorAll('*').forEach((hijo) => {
                 if (hijo.children.length === 0) {
                     const texto = (hijo.textContent || '').trim();
-                    if (texto && texto !== 'Analista' && texto !== 'Reasignar') {
+                    if (texto && texto !== 'Reasignar') {
                         partes.push(texto);
                     }
                 }
