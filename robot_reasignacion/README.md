@@ -42,7 +42,9 @@ analistas al CSV en el futuro.
 ## Reglas de negocio implementadas
 
 - **Ya asignada al analista objetivo** → se omite sin abrir el modal
-  (`omitida, "Ya estaba asignada a <nombre>"`).
+  y se registra como `ok, "Ya estaba asignada a <nombre>"` (no como
+  `omitida`): el estado objetivo ya está conseguido, así que cuenta para
+  la reanudación y no se vuelve a comprobar en la siguiente tanda.
 - **Operación cerrada** → se reasigna igual, pero el detalle del log lo
   indica (`"... (Operación cerrada, se reasignó igualmente)"`).
 - **No encontrada** → `omitida, "No encontrada"`, sigue con la siguiente.
