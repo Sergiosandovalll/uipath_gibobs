@@ -67,29 +67,6 @@ class SesionCaducadaError(Exception):
     no solo la operación en curso."""
 
 
-def click_texto_visible(page, texto, exact=True, timeout=5000):
-    """Hace clic en la única coincidencia de texto que esté realmente
-    visible. Útil para desplegables tipo Ant Design que dejan momentáneamente
-    un nodo duplicado (oculto) con el mismo texto mientras se abren/cierran:
-    en vez de adivinar un índice fijo (nth), se espera activamente a que
-    aparezca una opción visible y se hace clic en esa.
-
-    Reutilizado tal cual de hadmin_page.py (helper genérico, no depende del
-    DOM de un sistema en concreto). Recibe `page` (no un locator acotado)
-    porque el desplegable del modal (confirmado por codegen) monta sus
-    opciones fuera del propio diálogo."""
-    locator = page.get_by_text(texto, exact=exact)
-    limite = time.time() + timeout / 1000
-    while time.time() < limite:
-        for i in range(locator.count()):
-            candidato = locator.nth(i)
-            if candidato.is_visible():
-                candidato.click()
-                return
-        page.wait_for_timeout(100)
-    raise PlaywrightTimeoutError(f"No se encontró un elemento visible con texto '{texto}'")
-
-
 def pagina_es_login(page):
     """Detecta si Persefone ha devuelto la pantalla de login en vez del
     panel (sesión caducada).
@@ -243,13 +220,19 @@ def seleccionar_analista(dialogo, analista_objetivo):
     palabras del nombre mostrado (no solo la primera) como término de
     búsqueda: con solo el nombre de pila (p.ej. "Miguel") pueden aparecer
     varios analistas distintos en la lista (visto en producción: salía
-    también "Miguel Ángel Sánchez"), lo que aumenta el riesgo de que la
-    lista virtualizada del desplegable tape o recicle la fila justo al
-    hacer clic. Tras seleccionar, se espera activamente (no una espera fija)
-    a que el propio texto elegido dentro del combobox quede estable y no
-    haya ya ningún listado de opciones visible, para no bloquear el clic de
-    "Confirmar" (visto en producción) sin perder tiempo de más cuando el
-    desplegable cierra rápido."""
+    también "Miguel Ángel Sánchez"), y con dos palabras se acota a una
+    única opción (confirmado con capturas reales).
+
+    La opción se selecciona con TECLADO (flecha abajo + Enter), no con
+    clic: confirmado en producción, dos veces, que el clic sobre la opción
+    fallaba con timeout pese a verse claramente visible y resaltada en
+    pantalla — la lista es virtualizada y el pixel exacto del clic no
+    siempre coincide con el nodo real en el momento justo. Con la búsqueda
+    ya acotada a un único resultado, no hace falta clic: se espera a que
+    esa opción esté visible (el desplegable busca contra el backend, con
+    estado de "cargando" mientras filtra, así que puede tardar) y se
+    selecciona con el teclado, que Persefone gestiona internamente sin
+    depender de coordenadas de pantalla."""
     texto_mostrado = nombre_mostrado(analista_objetivo)
     partes = texto_mostrado.split()
     termino_busqueda = " ".join(partes[:2]) if len(partes) >= 2 else texto_mostrado
@@ -257,11 +240,16 @@ def seleccionar_analista(dialogo, analista_objetivo):
     combobox = dialogo.get_by_role("combobox")
     combobox.click()
     combobox.fill(termino_busqueda)
-    # El desplegable busca contra el backend (se ve un estado de "cargando"
-    # mientras filtra), así que puede tardar más de los 5s por defecto bajo
-    # carga (visto en producción, con la opción ya visible en pantalla pero
-    # el robot dándose por vencido antes de encontrarla).
-    click_texto_visible(dialogo.page, texto_mostrado, exact=True, timeout=8000)
+
+    opcion = dialogo.page.get_by_text(texto_mostrado, exact=True)
+    try:
+        opcion.first.wait_for(state="visible", timeout=8000)
+    except PlaywrightTimeoutError:
+        raise PlaywrightTimeoutError(
+            f"No apareció la opción '{texto_mostrado}' en el desplegable"
+        )
+    combobox.press("ArrowDown")
+    combobox.press("Enter")
 
     listbox = dialogo.page.get_by_role("listbox")
     limite = time.time() + 2
